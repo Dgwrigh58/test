@@ -69,17 +69,32 @@ def encrypt_vault_password(password, key, salt):
 
     return f"$ANSIBLE_VAULT;1.1;AES256\n{urlsafe_b64encode(iv + encrypted_password).decode('utf-8')}"
 
+def find_and_update_cert_pass(data, encrypted_password):
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key == 'cert_pass':
+                vault_tag = CommentedMap()
+                vault_tag.yaml_set_tag('!vault')
+                vault_tag[''] = encrypted_password
+                data[key] = vault_tag
+                return True
+            elif isinstance(value, dict) or isinstance(value, list):
+                found = find_and_update_cert_pass(value, encrypted_password)
+                if found:
+                    return True
+    elif isinstance(data, list):
+        for item in data:
+            found = find_and_update_cert_pass(item, encrypted_password)
+            if found:
+                return True
+    return False
+
 def update_inventory_file(inventory_path, encrypted_password):
     with open(inventory_path, 'r') as file:
         inventory = yaml.load(file)
 
     # Update the cert_pass field in the inventory file
-    if 'cert_pass' in inventory:
-        vault_tag = CommentedMap()
-        vault_tag.yaml_set_tag('!vault')
-        vault_tag[''] = encrypted_password
-        inventory['cert_pass'] = vault_tag
-    else:
+    if not find_and_update_cert_pass(inventory, encrypted_password):
         raise KeyError("The 'cert_pass' field is missing in the inventory file.")
 
     with open(inventory_path, 'w') as file:
