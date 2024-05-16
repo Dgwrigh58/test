@@ -1,0 +1,51 @@
+# Prompt for the zip file paths
+$nitm3ZipPath = Read-Host "Enter the path to the certificate zip file (nitm3.zip)"
+$nitm3PwZipPath = Read-Host "Enter the path to the password zip file (nitm3-pw.zip)"
+
+# Define the output directory based on the location of the certificate zip file
+$outputDir = [System.IO.Path]::GetDirectoryName($nitm3ZipPath)
+$outputPath = Join-Path -Path $outputDir -ChildPath "nitm3_output"
+
+# Ensure output directory exists
+if (-Not (Test-Path $outputPath)) {
+    New-Item -ItemType Directory -Path $outputPath
+}
+
+# Extract nitm3-pw.zip
+Expand-Archive -Path $nitm3PwZipPath -DestinationPath $outputPath
+
+# Find the jpg file in the extracted directory
+$jpgFile = Get-ChildItem -Path $outputPath -Filter *.jpg
+
+# Use PSOCR to extract text from the jpg file
+Import-Module PSOCR
+$password = Get-OCRText -ImagePath $jpgFile.FullName
+$password = $password.Trim()
+Write-Output "Extracted Password: $password"
+
+# Extract nitm3.zip
+Expand-Archive -Path $nitm3ZipPath -DestinationPath $outputPath
+
+# Find the pfx file in the extracted directory
+$pfxFile = Get-ChildItem -Path $outputPath -Filter *.pfx
+
+# Define paths for the decoded files
+$certOutPath = Join-Path $outputDir "certificate.pem"
+$keyOutPath = Join-Path $outputDir "privatekey.pem"
+
+# Use certutil to decode the pfx file
+$pfxDecodedPath = Join-Path $outputPath "decoded.pfx"
+$certutilCmd = "certutil -p `"$password`" -exportPFX $pfxFile.FullName $pfxDecodedPath"
+Invoke-Expression $certutilCmd
+
+# Export the certificate and key from the decoded pfx file
+$certutilCmdCert = "certutil -f -p `"$password`" -decode $pfxDecodedPath $certOutPath"
+$certutilCmdKey = "certutil -f -p `"$password`" -decode $pfxDecodedPath $keyOutPath"
+
+Invoke-Expression $certutilCmdCert
+Invoke-Expression $certutilCmdKey
+
+Write-Output "Certificate and key have been decoded and saved to $outputDir."
+
+# Clean up
+Remove-Item -Path $outputPath -Recurse
