@@ -14,12 +14,12 @@ def extract_text_from_image(image_path):
     text = pytesseract.image_to_string(img)
     return text.strip()
 
-def find_file_with_extension(directory, extension):
+def find_file_with_extensions(directory, extensions):
     for root, _, files in os.walk(directory):
         for file in files:
-            if file.endswith(extension):
+            if any(file.endswith(ext) for ext in extensions):
                 return os.path.join(root, file)
-    raise FileNotFoundError(f"No {extension} file found in the directory.")
+    raise FileNotFoundError(f"No file with extensions {extensions} found in the directory.")
 
 def main():
     try:
@@ -40,7 +40,7 @@ def main():
         extract_zip(nitm3_pw_zip_path, current_dir)
 
         # Find the jpg file in the extracted directory
-        jpg_file_path = find_file_with_extension(current_dir, '.jpg')
+        jpg_file_path = find_file_with_extensions(current_dir, ['.jpg', '.JPG'])
         print(f"Found JPG file: {jpg_file_path}")
 
         # Extract text from the jpg file
@@ -51,7 +51,7 @@ def main():
         extract_zip(nitm3_zip_path, current_dir)
 
         # Find the pfx file in the extracted directory
-        pfx_file_path = find_file_with_extension(current_dir, '.pfx')
+        pfx_file_path = find_file_with_extensions(current_dir, ['.pfx', '.PFX'])
         print(f"Found PFX file: {pfx_file_path}")
 
         # Define paths for the decoded files
@@ -96,9 +96,9 @@ def main():
 
     finally:
         # Clean up the extracted files
-        jpg_files = [f for f in os.listdir(current_dir) if f.endswith('.jpg')]
-        pfx_files = [f for f in os.listdir(current_dir) if f.endswith('.pfx')]
-        decoded_files = [f for f in os.listdir(current_dir) if f.endswith('.pem')]
+        jpg_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.jpg')]
+        pfx_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pfx')]
+        decoded_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pem')]
 
         for file in jpg_files + pfx_files + decoded_files:
             os.remove(os.path.join(current_dir, file))
