@@ -127,12 +127,12 @@ def main():
         print(f"An error occurred: {e}")
 
     finally:
-        # Clean up the extracted files
+        # Clean up the extracted files, excluding the final output files
         jpg_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.jpg')]
         pfx_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pfx')]
-        decoded_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pem')]
+        temp_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pem') and f != "certificate.pem" and f != "privatekey.pem"]
 
-        for file in jpg_files + pfx_files + decoded_files:
+        for file in jpg_files + pfx_files + temp_files:
             os.remove(os.path.join(current_dir, file))
 
 if __name__ == "__main__":
