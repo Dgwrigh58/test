@@ -1,9 +1,16 @@
 import os
+import yaml
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from base64 import urlsafe_b64encode, urlsafe_b64decode
+import re
+import subprocess
 import zipfile
 import pytesseract
 from PIL import Image
-import subprocess
-import re
 
 def extract_zip(zip_path, extract_to):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -37,6 +44,42 @@ def find_file_with_suffix(directory, suffix):
                 return os.path.join(root, file)
     raise FileNotFoundError(f"No file ending with {suffix} found in the directory.")
 
+def encrypt_vault_password(password, key, salt):
+    # Derive a key from the key and salt using PBKDF2
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key = kdf.derive(key)
+
+    # Pad the password to be a multiple of block size
+    padder = padding.PKCS7(algorithms.AES.block_size).padder()
+    padded_data = padder.update(password.encode()) + padder.finalize()
+
+    # Encrypt the padded password
+    iv = os.urandom(16)
+    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    encrypted_password = encryptor.update(padded_data) + encryptor.finalize()
+
+    return f"$ANSIBLE_VAULT;1.1;AES256\n{urlsafe_b64encode(iv + encrypted_password).decode('utf-8')}"
+
+def update_inventory_file(inventory_path, encrypted_password):
+    with open(inventory_path, 'r') as file:
+        inventory = yaml.safe_load(file)
+
+    # Update the CERT_PASS field in the inventory file
+    if 'CERT_PASS' in inventory:
+        inventory['CERT_PASS'] = encrypted_password
+    else:
+        raise KeyError("The 'CERT_PASS' field is missing in the inventory file.")
+
+    with open(inventory_path, 'w') as file:
+        yaml.safe_dump(inventory, file)
+
 def main():
     try:
         # Define the current directory
@@ -69,71 +112,20 @@ def main():
         password = extract_password_from_text(text)
         print(f"Extracted Password: {password}")
 
-        # Extract nitm3.zip
-        extract_zip(nitm3_zip_path, current_dir)
+        # Encrypt the password
+        encryption_key = os.urandom(32)
+        salt = os.urandom(16)
+        encrypted_password = encrypt_vault_password(password, encryption_key, salt)
+        print(f"Encrypted password: {encrypted_password}")
 
-        # Find the pfx file in the extracted directory
-        pfx_file_path = find_file_with_extension(current_dir, ('.pfx', '.PFX'))
-        print(f"Found PFX file: {pfx_file_path}")
+        # Update the inventory file with the encrypted password
+        inventory_path = os.path.join(current_dir, 'inventory.yml')
+        update_inventory_file(inventory_path, encrypted_password)
 
-        # Define paths for the decoded files
-        cert_out_path = os.path.join(current_dir, "certificate.pem")
-        key_out_path = os.path.join(current_dir, "privatekey.pem")
-        print(f"Certificate output path: {cert_out_path}")
-        print(f"Key output path: {key_out_path}")
-
-        # Decode the pfx file using openssl
-        pfx_decoded_path = os.path.join(current_dir, "decoded.pem")
-        pfx_to_pem_cmd = [
-            "openssl", "pkcs12", "-in", pfx_file_path,
-            "-out", pfx_decoded_path, "-nodes",
-            "-passin", f"pass:{password}"
-        ]
-        subprocess.run(pfx_to_pem_cmd, check=True)
-        print(f"Decoded PFX file: {pfx_decoded_path}")
-
-        # Check if the decoded file was created
-        if not os.path.isfile(pfx_decoded_path):
-            raise FileNotFoundError(f"Decoded PFX file not found: {pfx_decoded_path}")
-
-        # Separate the certificate and key from the decoded pem file
-        with open(pfx_decoded_path, 'r') as f:
-            lines = f.readlines()
-
-        with open(cert_out_path, 'w') as cert_file, open(key_out_path, 'w') as key_file:
-            cert_flag = False
-            key_flag = False
-            for line in lines:
-                if "BEGIN CERTIFICATE" in line:
-                    cert_flag = True
-                if "END CERTIFICATE" in line:
-                    cert_flag = False
-                    cert_file.write(line)
-                    continue
-                if cert_flag:
-                    cert_file.write(line)
-                if "BEGIN PRIVATE KEY" in line:
-                    key_flag = True
-                if "END PRIVATE KEY" in line:
-                    key_flag = False
-                    key_file.write(line)
-                    continue
-                if key_flag:
-                    key_file.write(line)
-
-        print(f"Certificate and key have been decoded and saved to {current_dir}.")
+        print("The inventory file has been updated successfully.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
-
-    finally:
-        # Clean up the extracted files, excluding the final output files
-        jpg_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.jpg')]
-        pfx_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pfx')]
-        temp_files = [f for f in os.listdir(current_dir) if f.lower().endswith('.pem') and f != "certificate.pem" and f != "privatekey.pem"]
-
-        for file in jpg_files + pfx_files + temp_files:
-            os.remove(os.path.join(current_dir, file))
 
 if __name__ == "__main__":
     main()
