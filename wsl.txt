@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
-from base64 import urlsafe_b64encode, urlsafe_b64decode
+from base64 import urlsafe_b64encode
 import re
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
@@ -73,14 +73,14 @@ def update_inventory_file(inventory_path, encrypted_password):
     with open(inventory_path, 'r') as file:
         inventory = yaml.load(file)
 
-    # Update the CERT_PASS field in the inventory file
-    if 'CERT_PASS' in inventory:
+    # Update the cert_pass field in the inventory file
+    if 'cert_pass' in inventory:
         vault_tag = CommentedMap()
         vault_tag.yaml_set_tag('!vault')
-        vault_tag['vault_text'] = encrypted_password
-        inventory['CERT_PASS'] = vault_tag
+        vault_tag[''] = encrypted_password
+        inventory['cert_pass'] = vault_tag
     else:
-        raise KeyError("The 'CERT_PASS' field is missing in the inventory file.")
+        raise KeyError("The 'cert_pass' field is missing in the inventory file.")
 
     with open(inventory_path, 'w') as file:
         yaml.dump(inventory, file)
