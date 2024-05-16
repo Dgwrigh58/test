@@ -14,12 +14,12 @@ def extract_text_from_image(image_path):
     text = pytesseract.image_to_string(img)
     return text.strip()
 
-def find_file_with_extensions(directory, extensions, exclude_suffix=""):
+def find_file_with_extension(directory, extensions):
     for root, _, files in os.walk(directory):
         for file in files:
-            if file.endswith(extensions) and not file.endswith(exclude_suffix):
+            if file.endswith(extensions):
                 return os.path.join(root, file)
-    raise FileNotFoundError(f"No file with extensions {extensions} found in the directory, excluding those ending with {exclude_suffix}.")
+    raise FileNotFoundError(f"No file with extensions {extensions} found in the directory.")
 
 def find_file_with_suffix(directory, suffix):
     for root, _, files in os.walk(directory):
@@ -35,7 +35,11 @@ def main():
 
         # Automatically find the zip files
         nitm3_pw_zip_path = find_file_with_suffix(current_dir, '-PW.zip')
-        nitm3_zip_path = find_file_with_extension(current_dir, '.zip', '-PW.zip')
+        nitm3_zip_path = find_file_with_extension(current_dir, '.zip')
+
+        # Ensure we exclude the password zip file from being picked up as the main zip file
+        if nitm3_pw_zip_path == nitm3_zip_path:
+            nitm3_zip_path = find_file_with_extension(current_dir, '.zip', exclude_suffix='-PW.zip')
 
         # Confirm paths
         if not os.path.isfile(nitm3_zip_path):
@@ -47,7 +51,7 @@ def main():
         extract_zip(nitm3_pw_zip_path, current_dir)
 
         # Find the jpg file in the extracted directory
-        jpg_file_path = find_file_with_extensions(current_dir, ('.jpg', '.JPG'))
+        jpg_file_path = find_file_with_extension(current_dir, ('.jpg', '.JPG'))
         print(f"Found JPG file: {jpg_file_path}")
 
         # Extract text from the jpg file
@@ -58,7 +62,7 @@ def main():
         extract_zip(nitm3_zip_path, current_dir)
 
         # Find the pfx file in the extracted directory
-        pfx_file_path = find_file_with_extensions(current_dir, ('.pfx', '.PFX'))
+        pfx_file_path = find_file_with_extension(current_dir, ('.pfx', '.PFX'))
         print(f"Found PFX file: {pfx_file_path}")
 
         # Define paths for the decoded files
