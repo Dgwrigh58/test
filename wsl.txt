@@ -79,6 +79,8 @@ def main():
         # Define paths for the decoded files
         cert_out_path = os.path.join(current_dir, "certificate.pem")
         key_out_path = os.path.join(current_dir, "privatekey.pem")
+        print(f"Certificate output path: {cert_out_path}")
+        print(f"Key output path: {key_out_path}")
 
         # Decode the pfx file using openssl
         pfx_decoded_path = os.path.join(current_dir, "decoded.pem")
@@ -89,6 +91,10 @@ def main():
         ]
         subprocess.run(pfx_to_pem_cmd, check=True)
         print(f"Decoded PFX file: {pfx_decoded_path}")
+
+        # Check if the decoded file was created
+        if not os.path.isfile(pfx_decoded_path):
+            raise FileNotFoundError(f"Decoded PFX file not found: {pfx_decoded_path}")
 
         # Separate the certificate and key from the decoded pem file
         with open(pfx_decoded_path, 'r') as f:
