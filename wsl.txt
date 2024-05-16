@@ -1,0 +1,89 @@
+import os
+import zipfile
+import pytesseract
+from PIL import Image
+import subprocess
+
+def extract_zip(zip_path, extract_to):
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to)
+
+def extract_text_from_image(image_path):
+    img = Image.open(image_path)
+    text = pytesseract.image_to_string(img)
+    return text.strip()
+
+def main():
+    # Prompt for the zip file paths
+    nitm3_zip_path = input("Enter the path to the certificate zip file (nitm3.zip): ")
+    nitm3_pw_zip_path = input("Enter the path to the password zip file (nitm3-pw.zip): ")
+
+    # Define the output directory based on the location of the certificate zip file
+    output_dir = os.path.dirname(nitm3_zip_path)
+    output_path = os.path.join(output_dir, "nitm3_output")
+
+    # Ensure output directory exists
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    # Extract nitm3-pw.zip
+    extract_zip(nitm3_pw_zip_path, output_path)
+
+    # Find the jpg file in the extracted directory
+    jpg_file = [f for f in os.listdir(output_path) if f.endswith('.jpg')][0]
+    jpg_file_path = os.path.join(output_path, jpg_file)
+
+    # Extract text from the jpg file
+    password = extract_text_from_image(jpg_file_path)
+    print(f"Extracted Password: {password}")
+
+    # Extract nitm3.zip
+    extract_zip(nitm3_zip_path, output_path)
+
+    # Find the pfx file in the extracted directory
+    pfx_file = [f for f in os.listdir(output_path) if f.endswith('.pfx')][0]
+    pfx_file_path = os.path.join(output_path, pfx_file)
+
+    # Define paths for the decoded files
+    cert_out_path = os.path.join(output_dir, "certificate.pem")
+    key_out_path = os.path.join(output_dir, "privatekey.pem")
+
+    # Decode the pfx file using openssl
+    pfx_decoded_path = os.path.join(output_path, "decoded.pem")
+    pfx_to_pem_cmd = f"openssl pkcs12 -in {pfx_file_path} -out {pfx_decoded_path} -nodes -passin pass:{password}"
+    subprocess.run(pfx_to_pem_cmd, shell=True, check=True)
+
+    # Separate the certificate and key from the decoded pem file
+    with open(pfx_decoded_path, 'r') as f:
+        lines = f.readlines()
+
+    with open(cert_out_path, 'w') as cert_file, open(key_out_path, 'w') as key_file:
+        cert_flag = False
+        key_flag = False
+        for line in lines:
+            if "BEGIN CERTIFICATE" in line:
+                cert_flag = True
+            if "END CERTIFICATE" in line:
+                cert_flag = False
+                cert_file.write(line)
+                continue
+            if cert_flag:
+                cert_file.write(line)
+            if "BEGIN PRIVATE KEY" in line:
+                key_flag = True
+            if "END PRIVATE KEY" in line:
+                key_flag = False
+                key_file.write(line)
+                continue
+            if key_flag:
+                key_file.write(line)
+
+    print(f"Certificate and key have been decoded and saved to {output_dir}.")
+
+    # Clean up
+    for f in os.listdir(output_path):
+        os.remove(os.path.join(output_path, f))
+    os.rmdir(output_path)
+
+if __name__ == "__main__":
+    main()
