@@ -1,5 +1,7 @@
 import os
-import yaml
+import zipfile
+import pytesseract
+from PIL import Image
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -7,10 +9,10 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 import re
-import subprocess
-import zipfile
-import pytesseract
-from PIL import Image
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
+
+yaml = YAML()
 
 def extract_zip(zip_path, extract_to):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -69,16 +71,19 @@ def encrypt_vault_password(password, key, salt):
 
 def update_inventory_file(inventory_path, encrypted_password):
     with open(inventory_path, 'r') as file:
-        inventory = yaml.safe_load(file)
+        inventory = yaml.load(file)
 
     # Update the CERT_PASS field in the inventory file
     if 'CERT_PASS' in inventory:
-        inventory['CERT_PASS'] = encrypted_password
+        vault_tag = CommentedMap()
+        vault_tag.yaml_set_tag('!vault')
+        vault_tag['vault_text'] = encrypted_password
+        inventory['CERT_PASS'] = vault_tag
     else:
         raise KeyError("The 'CERT_PASS' field is missing in the inventory file.")
 
     with open(inventory_path, 'w') as file:
-        yaml.safe_dump(inventory, file)
+        yaml.dump(inventory, file)
 
 def main():
     try:
