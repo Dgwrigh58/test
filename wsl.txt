@@ -14,27 +14,27 @@ def extract_text_from_image(image_path):
     text = pytesseract.image_to_string(img)
     return text.strip()
 
-def find_file_with_extensions(directory, extensions):
+def find_file_with_extensions(directory, extensions, suffix=""):
     for root, _, files in os.walk(directory):
         for file in files:
-            if any(file.endswith(ext) for ext in extensions):
+            if any(file.endswith(ext) for ext in extensions) and file.endswith(suffix):
                 return os.path.join(root, file)
-    raise FileNotFoundError(f"No file with extensions {extensions} found in the directory.")
+    raise FileNotFoundError(f"No file with extensions {extensions} and suffix {suffix} found in the directory.")
 
 def main():
     try:
-        # Prompt for the zip file paths
-        nitm3_zip_path = input("Enter the path to the certificate zip file (nitm3.zip): ")
-        nitm3_pw_zip_path = input("Enter the path to the password zip file (nitm3-pw.zip): ")
+        # Define the current directory
+        current_dir = os.getcwd()
+
+        # Automatically find the zip files
+        nitm3_pw_zip_path = find_file_with_extensions(current_dir, ['.zip'], '-PW.zip')
+        nitm3_zip_path = find_file_with_extensions(current_dir, ['.zip'])
 
         # Confirm paths
         if not os.path.isfile(nitm3_zip_path):
             raise FileNotFoundError(f"Certificate zip file not found: {nitm3_zip_path}")
         if not os.path.isfile(nitm3_pw_zip_path):
             raise FileNotFoundError(f"Password zip file not found: {nitm3_pw_zip_path}")
-
-        # Define the current directory
-        current_dir = os.getcwd()
 
         # Extract nitm3-pw.zip
         extract_zip(nitm3_pw_zip_path, current_dir)
@@ -60,8 +60,12 @@ def main():
 
         # Decode the pfx file using openssl
         pfx_decoded_path = os.path.join(current_dir, "decoded.pem")
-        pfx_to_pem_cmd = f"openssl pkcs12 -in {pfx_file_path} -out {pfx_decoded_path} -nodes -passin pass:{password}"
-        subprocess.run(pfx_to_pem_cmd, shell=True, check=True)
+        pfx_to_pem_cmd = [
+            "openssl", "pkcs12", "-in", pfx_file_path,
+            "-out", pfx_decoded_path, "-nodes",
+            "-passin", f"pass:{password}"
+        ]
+        subprocess.run(pfx_to_pem_cmd, check=True)
         print(f"Decoded PFX file: {pfx_decoded_path}")
 
         # Separate the certificate and key from the decoded pem file
