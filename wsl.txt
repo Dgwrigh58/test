@@ -35,11 +35,12 @@ def main():
 
         # Automatically find the zip files
         nitm3_pw_zip_path = find_file_with_suffix(current_dir, '-PW.zip')
-        nitm3_zip_path = find_file_with_extension(current_dir, '.zip')
-
-        # Ensure we exclude the password zip file from being picked up as the main zip file
-        if nitm3_pw_zip_path == nitm3_zip_path:
-            nitm3_zip_path = find_file_with_extension(current_dir, '.zip', exclude_suffix='-PW.zip')
+        
+        # Find the normal zip file excluding the -PW.zip file
+        zip_files = [f for f in os.listdir(current_dir) if f.endswith('.zip') and not f.endswith('-PW.zip')]
+        if not zip_files:
+            raise FileNotFoundError("No certificate zip file found.")
+        nitm3_zip_path = os.path.join(current_dir, zip_files[0])
 
         # Confirm paths
         if not os.path.isfile(nitm3_zip_path):
