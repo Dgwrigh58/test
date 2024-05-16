@@ -3,6 +3,7 @@ import zipfile
 import pytesseract
 from PIL import Image
 import subprocess
+import re
 
 def extract_zip(zip_path, extract_to):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -13,6 +14,14 @@ def extract_text_from_image(image_path):
     img = Image.open(image_path)
     text = pytesseract.image_to_string(img)
     return text.strip()
+
+def extract_password_from_text(text):
+    pattern = r"The following password has been used to protect the private key:\s*(\S+)\s*Please securely record the password."
+    match = re.search(pattern, text)
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError("Password not found in the text.")
 
 def find_file_with_extension(directory, extensions):
     for root, _, files in os.walk(directory):
@@ -56,7 +65,8 @@ def main():
         print(f"Found JPG file: {jpg_file_path}")
 
         # Extract text from the jpg file
-        password = extract_text_from_image(jpg_file_path)
+        text = extract_text_from_image(jpg_file_path)
+        password = extract_password_from_text(text)
         print(f"Extracted Password: {password}")
 
         # Extract nitm3.zip
