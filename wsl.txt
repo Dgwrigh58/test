@@ -10,7 +10,7 @@ from cryptography.hazmat.backends import default_backend
 from base64 import urlsafe_b64encode
 import re
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.comments import CommentedMap, TaggedScalar
 
 yaml = YAML()
 
@@ -73,10 +73,8 @@ def find_and_update_cert_pass(data, encrypted_password):
     if isinstance(data, dict):
         for key, value in data.items():
             if key == 'cert_pass':
-                vault_tag = CommentedMap()
-                vault_tag.yaml_set_tag('!vault')
-                vault_tag[''] = encrypted_password
-                data[key] = vault_tag
+                tagged_scalar = TaggedScalar('!vault', encrypted_password)
+                data[key] = tagged_scalar
                 return True
             elif isinstance(value, dict) or isinstance(value, list):
                 found = find_and_update_cert_pass(value, encrypted_password)
